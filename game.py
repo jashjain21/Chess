@@ -1,101 +1,57 @@
-from board import Board
-from player import Player
+from game_state import GameState
+from renderer import ChessRenderer
+from input_handler import InputHandler, ClickCommand, RestartCommand, QuitCommand
+from constants import BG_COLOR, SCREEN_WIDTH, SCREEN_HEIGHT
 import pygame
 
 pygame.init()
 
-bg_color = (0, 0, 0)
-screen_width = 480  # 660
-screen_height = 480  # 640
-size = (screen_width, screen_height)
+bg_color: tuple = BG_COLOR
+screen_width: int = SCREEN_WIDTH
+screen_height: int = SCREEN_HEIGHT
+size: tuple = (screen_width, screen_height)
 
-screen = pygame.display.set_mode(size)
+screen: pygame.Surface = pygame.display.set_mode(size)
 pygame.display.set_caption('Chess')
 # pygame.display.set_icon('icon.png')
-game_board = Board()
-white_player = Player(game_board, 'White')
-black_player = Player(game_board, 'Black')
-white_player.set_opponent(black_player)
-black_player.set_opponent(white_player)
-ended = False
+game_state: GameState = GameState()
+renderer: ChessRenderer = ChessRenderer(screen)
+input_handler: InputHandler = InputHandler()
 
 
-def reset():
-    global game_board, white_player, black_player, ended, result
-    game_board = Board()
-    white_player = Player(game_board, 'White')
-    black_player = Player(game_board, 'Black')
-    white_player.set_opponent(black_player)
-    black_player.set_opponent(white_player)
-    ended = False
-    result = 'Continue'
-    Player.turn = 0
+def redraw(game_state: GameState) -> None:
+    renderer.draw_board(game_state.board)
+    if game_state.result != 'Continue':
+        game_state.ended = True
+        renderer.draw_game_end(game_state.result, game_state.current_turn)
 
-
-def show_game_end(res):
-    text_size = 30
-    font = pygame.font.SysFont('SansSerif', text_size)
-    winner = f"{'White' if Player.turn == 1 else 'Black'} wins!!" if res == 'Checkmate' else None
-    restart = 'Press Space to restart'
-
-    end_screen_color = (142, 164, 210)
-    end_screen_width = 300
-    end_screen_height = 150
-    end_screen_x = screen_width // 2 - end_screen_width // 2
-    end_screen_y = screen_height // 2 - end_screen_height // 2
-    pygame.draw.rect(screen, end_screen_color, (end_screen_x, end_screen_y, end_screen_width, end_screen_height))
-
-    pos = (end_screen_x + end_screen_width // 2, end_screen_y + end_screen_height // 2)
-
-    message = font.render(res, True, (0, 0, 0))
-    rect = message.get_rect()
-    rect.center = (pos[0], pos[1] - text_size)
-    screen.blit(message, rect)
-
-    if winner is not None:
-        message = font.render(winner, True, (0, 0, 0))
-        rect = message.get_rect()
-        rect.center = pos
-        screen.blit(message, rect)
-
-    message = font.render(restart, True, (0, 0, 0))
-    rect = message.get_rect()
-    rect.center = (pos[0], pos[1] + text_size)
-    screen.blit(message, rect)
-
-
-def redraw(res):
-    global ended
-    game_board.draw(screen)
-    if res != 'Continue':
-        ended = True
-        show_game_end(res)
-
-    pygame.display.update()
+    renderer.update()
 
 
 run = True
-selected = None
-result = 'Continue'
 while run:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    commands = input_handler.process_events()
+    for command in commands:
+        if isinstance(command, QuitCommand):
             run = False
             break
-
-        if ended:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    reset()
-
-        else:
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                x, y = event.pos
-                if Player.turn == 0:
-                    result = white_player.play(x, y)
+        elif isinstance(command, RestartCommand):
+            if game_state.ended:
+                game_state.reset()
+        elif isinstance(command, ClickCommand):
+            if not game_state.ended:
+                result = game_state.current_player().play(command.x, command.y)
+                player = game_state.current_player()
+                if player.selected is None and game_state.board.promoting_pawn is None:
+                    game_state.current_turn ^= 1
+                    opponent = game_state.current_player()
+                    check = opponent.king.in_check(opponent.king.square)
+                    if check is not None:
+                        opponent.king.square.check_highlighted = True
+                    game_state.result = opponent.get_status(check, game_state.current_turn)
                 else:
-                    result = black_player.play(x, y)
+                    game_state.result = 'Continue'
 
-    redraw(result)
+    redraw(game_state)
 
 pygame.quit()

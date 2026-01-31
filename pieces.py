@@ -1,4 +1,10 @@
 import pygame
+from typing import TYPE_CHECKING, Optional
+from constants import PIECE_COLORS
+
+if TYPE_CHECKING:
+    from assets import AssetManager
+    import pygame
 
 pygame.init()
 
@@ -48,24 +54,18 @@ class Check:
 
 
 class Piece:
-    images = {
-        'Pawn': [pygame.image.load(r'chess_pieces/black_pawn.png'), pygame.image.load(r'chess_pieces/white_pawn.png')],
-        'Knight': [pygame.image.load(r'chess_pieces/black_knight.png'), pygame.image.load(
-            r'chess_pieces/white_knight.png')],
-        'Bishop': [pygame.image.load(r'chess_pieces/black_bishop.png'), pygame.image.load(
-            r'chess_pieces/white_bishop.png')],
-        'Rook': [pygame.image.load(r'chess_pieces/black_rook.png'), pygame.image.load(r'chess_pieces/white_rook.png')],
-        'Queen': [pygame.image.load(r'chess_pieces/black_queen.png'), pygame.image.load(
-            r'chess_pieces/white_queen.png')],
-        'King': [pygame.image.load(r'chess_pieces/black_king.png'), pygame.image.load(r'chess_pieces/white_king.png')]
-    }
-    colors = {'Black': 0, 'White': 1}
+    colors = PIECE_COLORS
 
-    def __init__(self, board, color, square):
+    def __init__(self, board, color: str, square, asset_manager: 'AssetManager') -> None:
         self.board = board
         self.color = color
         self.square = square
-        self.img = None
+        self.asset_manager = asset_manager
+        piece_name = self.__class__.__name__
+        if piece_name in self.asset_manager.images:
+            self.img: Optional[pygame.Surface] = self.asset_manager.get_image(piece_name, self.color)
+        else:
+            self.img = None
 
     def __repr__(self):
         return f'{self.__class__} {self.color}'
@@ -199,10 +199,9 @@ class Piece:
 
 
 class Pawn(Piece):
-    def __init__(self, board, color, square):
-        super().__init__(board, color, square)
-        self.en_passant = 0
-        self.img = self.images['Pawn'][Piece.colors[color]]
+    def __init__(self, board, color: str, square, asset_manager: 'AssetManager') -> None:
+        super().__init__(board, color, square, asset_manager)
+        self.en_passant: int = 0
 
     def en_passant_available(self, left, right):
         if left is not None:
@@ -230,7 +229,7 @@ class Pawn(Piece):
         return False
 
     def promote(self, piece):
-        promoted = piece(self.board, self.color, self.square)
+        promoted = piece(self.board, self.color, self.square, self.asset_manager)
         self.square.piece = promoted
         self.square = None
         return promoted
@@ -315,9 +314,8 @@ class Pawn(Piece):
 
 
 class Knight(Piece):
-    def __init__(self, board, color, square):
-        super().__init__(board, color, square)
-        self.img = self.images['Knight'][Piece.colors[color]]
+    def __init__(self, board, color: str, square, asset_manager: 'AssetManager') -> None:
+        super().__init__(board, color, square, asset_manager)
 
     def possible_moves(self, check):
         pin = self.pinned()
@@ -337,9 +335,8 @@ class Knight(Piece):
 
 
 class Bishop(Piece):
-    def __init__(self, board, color, square):
-        super().__init__(board, color, square)
-        self.img = self.images['Bishop'][Piece.colors[color]]
+    def __init__(self, board, color: str, square, asset_manager: 'AssetManager') -> None:
+        super().__init__(board, color, square, asset_manager)
 
     def possible_moves(self, check):
         pin = self.pinned()
@@ -394,10 +391,9 @@ class Bishop(Piece):
 
 
 class Rook(Piece):
-    def __init__(self, board, color, square):
-        super().__init__(board, color, square)
-        self.img = self.images['Rook'][Piece.colors[color]]
-        self.moved = False
+    def __init__(self, board, color: str, square, asset_manager: 'AssetManager') -> None:
+        super().__init__(board, color, square, asset_manager)
+        self.moved: bool = False
 
     def move(self, square):
         super().move(square)
@@ -453,20 +449,19 @@ class Rook(Piece):
 
 
 class Queen(Piece):
-    def __init__(self, board, color, square):
-        super().__init__(board, color, square)
-        self.img = self.images['Queen'][Piece.colors[color]]
+    def __init__(self, board, color: str, square, asset_manager: 'AssetManager') -> None:
+        super().__init__(board, color, square, asset_manager)
 
     def possible_moves(self, check):
-        dummy_bishop = Bishop(self.board, self.color, self.square)
-        dummy_rook = Rook(self.board, self.color, self.square)
+        dummy_bishop = Bishop(self.board, self.color, self.square, self.asset_manager)
+        dummy_rook = Rook(self.board, self.color, self.square, self.asset_manager)
 
         return dummy_bishop.possible_moves(check) + dummy_rook.possible_moves(check)
 
 
 class Dummy(Knight, Bishop, Rook, Queen):
-    def __init__(self, board, color, square, piece, king):
-        super().__init__(board, color, square)
+    def __init__(self, board, color: str, square, piece, king, asset_manager: 'AssetManager'):
+        Piece.__init__(self, board, color, square, asset_manager)
         self.type = piece
         self.king = king
 
@@ -486,17 +481,16 @@ class Dummy(Knight, Bishop, Rook, Queen):
 
     def possible_moves(self, check):
         if self.type == Queen:
-            dummy_bishop = Dummy(self.board, self.color, self.square, Bishop, self.king)
-            dummy_rook = Dummy(self.board, self.color, self.square, Rook, self.king)
+            dummy_bishop = Dummy(self.board, self.color, self.square, Bishop, self.king, self.asset_manager)
+            dummy_rook = Dummy(self.board, self.color, self.square, Rook, self.king, self.asset_manager)
             return dummy_bishop.possible_moves(check) + dummy_rook.possible_moves(check)
         return self.type.possible_moves(self, check)
 
 
 class King(Piece):
-    def __init__(self, board, color, square):
-        super().__init__(board, color, square)
-        self.img = self.images['King'][Piece.colors[color]]
-        self.moved = False
+    def __init__(self, board, color: str, square, asset_manager: 'AssetManager') -> None:
+        super().__init__(board, color, square, asset_manager)
+        self.moved: bool = False
 
     def move(self, square):
         if self.color == 'White':
@@ -523,13 +517,7 @@ class King(Piece):
             self.moved = True
 
     def checked_by(self, square, piece):
-        dummy = Dummy(self.board, self.color, square, piece, self)
-        moves = dummy.possible_moves(None)
-        for move in moves:
-            if isinstance(move.piece, piece) and move.piece.color != self.color:
-                return move.piece
-
-        return None
+        return self.board.move_validator.is_attacked_by(self.board, square, piece, self.color)
 
     @staticmethod
     def adjacent_squares(i, j):
@@ -548,30 +536,8 @@ class King(Piece):
 
         return False
 
-    def in_check(self, square):
-        checking_pieces = []
-        for piece in [Knight, Bishop, Rook, Queen]:
-            checking_piece = self.checked_by(square, piece)
-            if checking_piece is not None:
-                checking_pieces.append(checking_piece)
-
-        right = left = None
-
-        if self.color == 'White':
-            right = self.board.get_square(square.row + 1, square.column + 1)
-            left = self.board.get_square(square.row + 1, square.column - 1)
-        elif self.color == 'Black':
-            right = self.board.get_square(square.row - 1, square.column + 1)
-            left = self.board.get_square(square.row - 1, square.column - 1)
-
-        if right is not None and isinstance(right.piece, Pawn):
-            if right.piece.color != self.color:
-                checking_pieces.append(right.piece)
-        if left is not None and isinstance(left.piece, Pawn):
-            if left.piece.color != self.color:
-                checking_pieces.append(left.piece)
-
-        return None if len(checking_pieces) == 0 else Check(self, checking_pieces)
+    def in_check(self):
+        return self.board.move_validator.is_in_check(self.board, self.color)
 
     def add_if_legal(self, moves, move, check, pin):
         if move is None:

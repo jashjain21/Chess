@@ -1,83 +1,83 @@
 from pieces import Piece, Pawn, Rook, Knight, Bishop, Queen, King
+from constants import (
+    COLOR_BOARD_LIGHT,
+    COLOR_BOARD_DARK,
+    COLOR_HIGHLIGHT,
+    COLOR_CHECK_HIGHLIGHT,
+    SCREEN_WIDTH,
+    TILE_SIZE
+)
+from typing import TYPE_CHECKING, Optional, List
+if TYPE_CHECKING:
+    from assets import AssetManager
 import pygame
 
 pygame.init()
 
 
 class Square:
-    white = (250, 215, 180)
-    black = (105, 58, 12)
-    highlight = (120, 223, 245)
-    check_highlight = (255, 0, 0)
+    white = COLOR_BOARD_LIGHT
+    black = COLOR_BOARD_DARK
+    highlight = COLOR_HIGHLIGHT
+    check_highlight = COLOR_CHECK_HIGHLIGHT
     home_piece = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
     # home_piece = [None, Knight, Bishop, None, King, None, None, None]
 
-    def __init__(self, board, row, column, color, x, y, length):
+    def __init__(self, board, row: int, column: int, color, x: int, y: int, length: int) -> None:
         self.board = board
-        self.column = column
-        self.row = row
+        self.column: int = column
+        self.row: int = row
         self.color = color
-        self.x = x
-        self.y = y
-        self.length = length
-        self.piece = self.get_home_piece()
-        self.highlighted = False
-        self.selected_highlighted = False
-        self.check_highlighted = False
+        self.x: int = x
+        self.y: int = y
+        self.length: int = length
+        self.piece: Optional[Piece] = self.get_home_piece()
+        self.highlighted: bool = False
+        self.selected_highlighted: bool = False
+        self.check_highlighted: bool = False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.get_name()} -> {self.piece}'
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self.row == other.row and self.column == other.column
 
-    def get_name(self):
+    def get_name(self) -> str:
         return f"{chr(ord('a') + self.column - 1)}{self.row}"
 
-    def get_home_piece(self):
+    def get_home_piece(self) -> Optional[Piece]:
+        asset_manager = self.board.asset_manager
         if self.row == 1:
-            return self.home_piece[self.column - 1](self.board, 'White', self)
+            return self.home_piece[self.column - 1](self.board, 'White', self, asset_manager)
         elif self.row == 8:
-            return self.home_piece[self.column - 1](self.board, 'Black', self)
+            return self.home_piece[self.column - 1](self.board, 'Black', self, asset_manager)
         elif self.row == 2:
-            return Pawn(self.board, 'White', self)
+            return Pawn(self.board, 'White', self, asset_manager)
         elif self.row == 7:
-            return Pawn(self.board, 'Black', self)
+            return Pawn(self.board, 'Black', self, asset_manager)
+        return None
 
-    def draw(self, win):
-        if self.highlighted:
-            if self.piece is not None:
-                pygame.draw.rect(win, self.highlight, (self.x, self.y, self.length, self.length))
-            else:
-                pygame.draw.circle(win, self.highlight, (self.x + self.length // 2, self.y + self.length // 2),
-                                   self.length // 6)
-        elif self.check_highlighted:
-            pygame.draw.rect(win, self.check_highlight, (self.x, self.y, self.length, self.length))
-        elif self.selected_highlighted:
-            pygame.draw.rect(win, self.highlight, (self.x, self.y, self.length, self.length))
-        else:
-            pygame.draw.rect(win, self.color, (self.x, self.y, self.length, self.length))
 
-        self.draw_piece(win)
-
-    def draw_piece(self, win):
-        if self.piece is None:
-            return
-        win.blit(self.piece.img, (self.x, self.y))
 
 
 class Board:
-    def __init__(self):
-        self.length = 480
-        self.x = 0
-        self.y = 0
-        self.square_length = self.length // 8
-        self.squares = self.make_squares()
-        self.kings = {'White': self.get_square(1, 5).piece,
-                      'Black': self.get_square(8, 5).piece}
-        self.promoting_pawn = None
+    def __init__(self, asset_manager: 'AssetManager', move_validator: 'MoveValidator') -> None:
+        self.asset_manager: 'AssetManager' = asset_manager
+        self.move_validator: 'MoveValidator' = move_validator
+        self.length: int = SCREEN_WIDTH
+        self.x: int = 0
+        self.y: int = 0
+        self.square_length: int = TILE_SIZE
+        self.squares: List[List[Square]] = self.make_squares()
+        white_king_square = self.get_square(1, 5)
+        black_king_square = self.get_square(8, 5)
+        assert white_king_square is not None and white_king_square.piece is not None
+        assert black_king_square is not None and black_king_square.piece is not None
+        self.kings: dict = {'White': white_king_square.piece,
+                      'Black': black_king_square.piece}
+        self.promoting_pawn: Optional[Piece] = None
 
-    def get_square(self, row, column):
+    def get_square(self, row: int, column: int) -> Optional[Square]:
         """
         This method finds the square given a row and a column
         :param row: Row of the square
@@ -88,7 +88,7 @@ class Board:
             return None
         return self.squares[8 - row][column - 1]
 
-    def make_squares(self):
+    def make_squares(self) -> List[List[Square]]:
         """
         This method creates the board representation matrix
         :return:  8*8 matrix of "Square" objects
@@ -111,39 +111,7 @@ class Board:
 
         return squares
 
-    def draw_promotion_screen(self, win):
-        """
-        This method draws the promotion options on the window
-        :param win: window on which the promotion pieces will be drawn
-        """
-        length = self.square_length
-        x = self.promoting_pawn.square.x
-        y = self.promoting_pawn.square.y
-        if self.promoting_pawn.color == 'White':
-            pygame.draw.rect(win, (73, 81, 111), (x, y, length, 4 * length))
-            win.blit(Piece.images['Queen'][1], (x, y))
-            win.blit(Piece.images['Rook'][1], (x, y + length))
-            win.blit(Piece.images['Bishop'][1], (x, y + 2 * length))
-            win.blit(Piece.images['Knight'][1], (x, y + 3 * length))
 
-        else:
-            pygame.draw.rect(win, (98, 121, 184), (x, y - 3 * length, length, 4 * length))
-            win.blit(Piece.images['Queen'][0], (x, y))
-            win.blit(Piece.images['Rook'][0], (x, y - length))
-            win.blit(Piece.images['Bishop'][0], (x, y - 2 * length))
-            win.blit(Piece.images['Knight'][0], (x, y - 3 * length))
-
-    def draw(self, win):
-        """
-        This method draws the board on the window
-        :param win: the window on which the board will be drawn
-        """
-        for row in self.squares:
-            for square in row:
-                square.draw(win)
-
-        if self.promoting_pawn is not None:
-            self.draw_promotion_screen(win)
 
     def get_clicked_square(self, x, y):
         """

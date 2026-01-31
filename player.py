@@ -5,8 +5,6 @@ pygame.init()
 
 
 class Player:
-    turn = 0
-
     def __init__(self, board, color):
         self.board = board
         self.color = color
@@ -21,16 +19,14 @@ class Player:
 
     def set_opponent(self, other):
         """
-        sets the opponent of the player
-        :param other: A Player Object
+        Sets the opponent of the player
         """
         self.opponent = other
 
-    def get_status(self, check):
+    def get_status(self, check, current_turn):
         """
-        Finds out whether the game should continue or end. If ended, finds the result.
-        :param check: Check Object
-        :return: A string containing current status of the game
+        Determines whether the game should continue or end.
+        Called ONLY from GameState.
         """
         flag = True
         insufficient = False
@@ -42,32 +38,32 @@ class Player:
             elif len(self.opponent.legal_moves) == 2:
                 insufficient = True
                 for piece in self.opponent.legal_moves:
-                    if isinstance(piece, Queen) or isinstance(piece, Rook) or isinstance(piece, Pawn):
+                    if isinstance(piece, (Queen, Rook, Pawn)):
                         insufficient = False
+
         elif len(self.legal_moves) == 2:
             insufficient = True
             remaining = None
             for piece in self.legal_moves:
-                if isinstance(piece, Queen) or isinstance(piece, Rook) or isinstance(piece, Pawn):
+                if isinstance(piece, (Queen, Rook, Pawn)):
                     insufficient = False
                 elif not isinstance(piece, King):
                     remaining = piece
+
             if insufficient:
                 if len(self.opponent.legal_moves) == 2:
-                    if not isinstance(remaining, Bishop):
-                        insufficient = False
-                    else:
-                        opponent_remaining = None
-                        for piece in self.opponent.legal_moves:
-                            if isinstance(piece, Queen) or isinstance(piece, Rook) or isinstance(piece, Pawn):
-                                insufficient = False
-                            elif not isinstance(piece, King):
-                                opponent_remaining = piece
-                        if isinstance(opponent_remaining, Bishop):
-                            if remaining.square.color != opponent_remaining.square.color:
-                                insufficient = False
-                        else:
+                    opponent_remaining = None
+                    for piece in self.opponent.legal_moves:
+                        if isinstance(piece, (Queen, Rook, Pawn)):
                             insufficient = False
+                        elif not isinstance(piece, King):
+                            opponent_remaining = piece
+
+                    if isinstance(remaining, Bishop) and isinstance(opponent_remaining, Bishop):
+                        if remaining.square.color != opponent_remaining.square.color:
+                            insufficient = False
+                    else:
+                        insufficient = False
                 elif len(self.opponent.legal_moves) > 2:
                     insufficient = False
 
@@ -91,7 +87,7 @@ class Player:
 
     def set_legal_moves(self):
         """
-        Sets player pieces at object creation
+        Initializes pieces at object creation
         """
         limit = (1, 3) if self.color == 'White' else (7, 9)
         for i in range(limit[0], limit[1]):
@@ -100,12 +96,12 @@ class Player:
 
     def get_legal_moves(self, check):
         """
-        Calculates the legal move for all pieces currently on the board
-        :param check: A Check object
+        Calculates legal moves for all pieces
         """
         if check is not None and check.double_check():
             self.legal_moves[self.king] = self.king.possible_moves(check)
             return
+
         captured = []
         for piece in self.legal_moves:
             if piece.square is None:
@@ -118,7 +114,7 @@ class Player:
 
     def clear_legal_moves(self):
         """
-        Clears all the previous legal moves
+        Clears all previous legal moves
         """
         for piece in self.legal_moves:
             self.legal_moves[piece] = []
@@ -127,28 +123,26 @@ class Player:
 
     def highlight_legal_moves(self, piece):
         """
-        Highlights the legal move of a selected piece
-        :param piece: A Piece Object
+        Highlights legal moves for selected piece
         """
         for move in self.legal_moves[piece]:
             move.highlighted = not move.highlighted
 
     def select(self, piece):
         """
-        Selected the piece clicked
-        :param piece: A Piece Object
+        Selects a piece
         """
         self.selected = piece
         if self.selected is not None and self.selected.color != self.color:
             self.selected = None
+
         if self.selected is not None:
-            # print(self.selected)
             self.highlight_legal_moves(self.selected)
             piece.square.selected_highlighted = True
 
     def unselect(self):
         """
-        Removes the current selected piece
+        Unselects current piece
         """
         self.selected.square.selected_highlighted = False
         self.highlight_legal_moves(self.selected)
@@ -156,71 +150,41 @@ class Player:
 
     def end_turn(self):
         """
-        Ends the turn for the current player
-        :return: returns the current status of the game
+        Clears selection and move highlights at end of turn.
         """
-        Player.turn ^= 1
-        check = self.opponent.king.in_check(self.opponent.king.square)
-        if check is not None:
-            self.opponent.king.square.check_highlighted = True
-        status = self.opponent.get_status(check)
-        return status
+        self.selected = None
+        self.clear_legal_moves()
 
     def promotion(self, sq):
         """
         Handles pawn promotion
-        :param sq: A Square Object
-        :return: returns status of the game after promotion
         """
-        if sq.column == self.promoting_pawn.square.column:
-            if self.color == 'White':
-                # promoted_piece = None
-                if sq.row == 8:
-                    promoted_piece = self.promoting_pawn.promote(Queen)
-                elif sq.row == 7:
-                    promoted_piece = self.promoting_pawn.promote(Rook)
-                elif sq.row == 6:
-                    promoted_piece = self.promoting_pawn.promote(Bishop)
-                elif sq.row == 5:
-                    promoted_piece = self.promoting_pawn.promote(Knight)
-                else:
-                    return 'Continue'
-
-                if promoted_piece is not None:
-                    del self.legal_moves[self.promoting_pawn]
-                    self.legal_moves[promoted_piece] = []
-                    self.promoting_pawn = None
-                    self.board.promoting_pawn = None
-                    return self.end_turn()
-
-            else:
-                # promoted_piece = None
-                if sq.row == 1:
-                    promoted_piece = self.promoting_pawn.promote(Queen)
-                elif sq.row == 2:
-                    promoted_piece = self.promoting_pawn.promote(Rook)
-                elif sq.row == 3:
-                    promoted_piece = self.promoting_pawn.promote(Bishop)
-                elif sq.row == 4:
-                    promoted_piece = self.promoting_pawn.promote(Knight)
-                else:
-                    return 'Continue'
-
-                if promoted_piece is not None:
-                    del self.legal_moves[self.promoting_pawn]
-                    self.legal_moves[promoted_piece] = []
-                    self.promoting_pawn = None
-                    self.board.promoting_pawn = None
-                    return self.end_turn()
-        else:
+        if sq.column != self.promoting_pawn.square.column:
             return 'Continue'
+
+        if self.color == 'White':
+            mapping = {8: Queen, 7: Rook, 6: Bishop, 5: Knight}
+        else:
+            mapping = {1: Queen, 2: Rook, 3: Bishop, 4: Knight}
+
+        piece_cls = mapping.get(sq.row)
+        if piece_cls is None:
+            return 'Continue'
+
+        promoted_piece = self.promoting_pawn.promote(piece_cls)
+        if promoted_piece is not None:
+            del self.legal_moves[self.promoting_pawn]
+            self.legal_moves[promoted_piece] = []
+            self.promoting_pawn = None
+            self.board.promoting_pawn = None
+            self.end_turn()
+            return 'Continue'
+
+        return 'Continue'
 
     def play(self, x, y):
         """
-        Handling the players play
-        :param x: x-coordinate of click
-        :param y: y-coordinate of click
-        :return: the current status of the game
+        Handles a player click
         """
         sq = self.board.get_clicked_square(x, y)
         if sq is None:
@@ -229,22 +193,21 @@ class Player:
         if self.promoting_pawn is not None:
             return self.promotion(sq)
 
-        elif self.selected is not None:
+        if self.selected is not None:
             if sq in self.legal_moves[self.selected]:
                 if self.king.square.check_highlighted:
                     self.king.square.check_highlighted = False
-                self.selected.square.selected_highlighted = False
 
+                self.selected.square.selected_highlighted = False
                 self.promoting_pawn = self.selected.move(sq)
 
                 self.unselect()
                 self.clear_legal_moves()
 
-                if self.promoting_pawn is None:
-                    return self.end_turn()
-                else:
+                if self.promoting_pawn is not None:
                     self.board.promoting_pawn = self.promoting_pawn
-                    return 'Continue'
+
+                return 'Continue'
 
             elif sq.piece is not None:
                 if sq.piece == self.selected:
